@@ -7,16 +7,10 @@ import { RegisterDTO } from './dtos/register.dto';
 export class AppController {
   constructor(private readonly appService: AppService) {}
 
-  @Get()
-  getHello(): string {
-    return this.appService.getHello();
-  }
-
-
   @Post()
   @HttpCode(200)
   async login(@Req() req: Request, @Body() body: LoginDTO) {
-    
+
   }
 
   @Post('register')
