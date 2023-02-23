@@ -28,7 +28,7 @@ async function main() {
     });
 
     const password = 'P@ssword123!';
-    const passwordHash = await bcrypt(password, 10);
+    const passwordHash = await bcrypt.hash(password, 10);
 
     const superAdminUser = await prisma.user.create({
         data: {
