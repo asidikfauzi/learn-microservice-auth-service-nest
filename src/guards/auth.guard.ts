@@ -1,11 +1,15 @@
-import { ExecutionContext, Injectable, UnauthorizedException } from "@nestjs/common";
+import { 
+    ExecutionContext, 
+    Injectable, 
+    UnauthorizedException 
+} from "@nestjs/common";
 import { TokenService } from "src/services";
 
 @Injectable()
 export class JwtAuthGuard {
     constructor(private tokenService: TokenService) {}
 
-    async canActive(context: ExecutionContext) {
+    async canActivate(context: ExecutionContext) {
         const request = context.switchToHttp().getRequest();
         let token = request.headers['authorization'];
         if(!token) {
