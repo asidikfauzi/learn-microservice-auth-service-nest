@@ -1,4 +1,4 @@
-import { BadRequestException, HttpStatus, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, HttpStatus, Inject, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { User } from '@prisma/client';
 import { LoginDTO, RegisterDTO } from './dtos';
@@ -14,7 +14,7 @@ export class AppService {
     private readonly logClient: ClientProxy,
   ) {}
 
-  async login(req, body: LoginDTO) {
+  async login(req, body: LoginDTO, ip) {
     const {username_or_email, password} = body;
 
     const user = await this.prisma.user.findFirst({
@@ -42,6 +42,58 @@ export class AppService {
         "We couldn't find your account. Please check your information or sign up for a new account."
       )
     }
+
+    if(!user.is_active) {
+      return new ForbiddenException(
+        'Your account is inactive. Please log in and activate it before continuing.',
+      )
+    }
+
+    if(!(await bcrypt.compare(password, user.password))) {
+      throw new UnauthorizedException(
+        'incorrect login information. Please check your username and password and try again.'
+      )
+    }
+
+    const permissionCodes = user.role.permissions.map(
+      ({ permission }) => permission.permission_code,
+    );
+
+    const accesToken = await this.token.generateToken(
+      user.id,
+      user.role.role_name,
+      permissionCodes
+    );
+
+    user['role_name'] = user.role.role_name;
+    delete user.role_id;
+    delete user.role;
+    delete user.password
+    delete user.deleted_at
+
+    const getIp = ip.replace(/:|f/g, "");
+    const userAgent = req.headers['user-agent'];
+    
+    const logPayload = {
+      timestamp: new Date(),
+      action: 'LOGIN',
+      user_id: user.id,
+      ip_address: getIp,
+      user_agent: userAgent,
+      details: '',
+    }
+
+    this.logClient.emit('add_log', JSON.stringify(logPayload));
+
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully Login',
+      data: {
+        accesToken,
+        user
+      }
+    }
+
   }
 
   async register(req, body: RegisterDTO, ip) {
@@ -126,5 +178,34 @@ export class AppService {
         user,
       },
     };
+  }
+
+  async getAuthUser(req) {
+    const user = await this.prisma.user.findFirst({
+      include: {
+        role: {
+          include: {
+            permissions: {
+              include: {
+                permission: true,
+              },
+            },
+          },
+        },
+      },
+      where: { id: req.user.user_id },
+    });
+
+    user['role_name'] = user.role.role_name;
+    delete user.role_id;
+    delete user.role;
+    delete user.password
+    delete user.deleted_at
+    
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Successfully Get Authenticated User',
+      data: user,
+    }
   }
 }
